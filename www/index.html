@@ -1,0 +1,336 @@
+
+<html>
+<head>
+	<title>Towers of Hanoi</title>
+		<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.5.0/jquery.min.js"></script>
+		<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.9/jquery-ui.min.js"></script>
+		<script>
+			// behaves like peek() in stack, returns the last element w/o deleting it
+			Array.prototype.peek = function () {
+    			return this.slice(-1)[0];
+			};
+
+			function Game (numOfDiscs) {
+				this.numOfDiscs = numOfDiscs;
+				this.state = [];
+				this.numOfMoves = 0;
+
+				this.changeNumberOfDiscs = function(num) {
+					this.numOfDiscs = num;
+					this.init();	
+				}
+				this.toString = function() {
+					return "it's a game with " + this.numOfDiscs + " rings";
+				}
+				/////////////////////////
+				// logic part of the game
+				/////////////////////////
+
+				this.isMoveLegal = function(towerNumber, discNumber) {
+					// if this tower is empty, any size disc is valid
+					if (this.state[towerNumber].length == 0) {
+						return true;
+					}
+					var topDiscNumber = this.state[towerNumber].peek();
+					if (discNumber < topDiscNumber) {
+						return true;
+					}
+					return false;
+				}
+
+				// move disc with index discNum from tower towerNum1 to tower towerNum2
+				this.moveDisc = function(towerNum1, towerNum2, discNum) {
+					if (this.isMoveLegal(towerNum2, discNum)) {
+						this.numOfMoves++;
+						var disc = this.state[towerNum1].pop();
+						this.state[towerNum2].push(disc);
+					}
+				}
+
+				this.solve = function() {
+					// go back to the original state of the game
+					this.init();
+					// solve
+					var from = [];
+					var to = [];
+					this.recursiveSolve(0, 2, this.numOfDiscs, from, to);
+					var  n = from.length;
+					
+					for (var i = 0; i < n; i++) {
+						var timeoutLength = 1000 * (i + 1);
+						var self = this;
+
+						(function (i) {
+    						setTimeout(function() { 
+			    							var disc = self.state[from[i]].pop();
+											self.state[to[i]].push(disc);
+											self.drawDiscs(); 
+											self.numOfMoves++;
+										    self.updateCurrentNumberOfMoves();
+							    		}, 
+							timeoutLength);
+  						})(i);
+												
+					}
+				}
+
+
+
+				this.recursiveSolve = function(towerNum1, towerNum2, n, from, to) {
+					if (n == 1) {
+						from.push(towerNum1);
+						to.push(towerNum2);
+	
+					}	
+					else {
+						var tempTower = 3 - towerNum1 - towerNum2;
+						this.recursiveSolve(towerNum1, tempTower, n - 1, from, to);
+						this.recursiveSolve(towerNum1, towerNum2, 1, from, to);
+						this.recursiveSolve(tempTower, towerNum2, n-1, from, to);
+					}
+				}
+
+
+
+				///////////////////////////
+				// Drawing part of the game
+				///////////////////////////
+
+				this.init = function() {
+
+					var stack1 = [];
+					var stack2 = [];
+					var stack3 = [];
+
+
+					for (var i = this.numOfDiscs - 1; i >= 0; i--) {
+						stack1.push(i);
+					}
+					this.state = [stack1, stack2, stack3];
+					this.numOfMoves = 0;
+					
+					this.drawDiscs();
+    				this.makeDiscsDraggable();
+    				this.makeTowerDivsDroppable();
+    				this.showControlPanel();
+				}
+
+				this.showControlPanel = function() {					
+					$("#minMoves").html("Minimum number of moves: " + (Math.pow(2, this.numOfDiscs) - 1));
+					$("#currentNumOfMoves").html("Current number of moves: " + this.numOfMoves);
+				}
+
+				// draw current state of game, according to this.state
+				this.drawDiscs = function() {
+					// remove all the content of ringDivs
+					$('.rings').html("");
+					// generate numOfDiscs discs and put them on corresponding towers
+					divs = [];
+					for (var i = 0; i < this.numOfDiscs; i++) {
+						divs.push($("<div class = 'ring sz-"+i+"' data-num = '" + i + "'></div>"));
+					}
+					for (var i = 0; i < this.state.length; i++) {
+						var ringDiv = $(".rings:eq("+i+")");
+						var totalHeight = 0;
+						for (var j = this.state[i].length - 1; j >= 0; j--) {
+							ringDiv.append(divs[this.state[i][j]]);
+
+						}
+					}
+				}
+
+				this.updateCurrentNumberOfMoves = function() {
+					$("#currentNumOfMoves").html("Current number of moves: " + this.numOfMoves);	
+				}
+				// make top discs on every tower draggable
+				this.makeDiscsDraggable = function() {
+					for (var i = 0; i < this.state.length; i++) {
+						// find top disc in i-th div
+						var topDisc = $(".rings:eq("+i+") > .ring:eq(0)");
+						topDisc.draggable({
+    						containment: '#game'
+    					});
+					}	
+				}
+
+				// process drag and drop
+				this.makeTowerDivsDroppable = function() {
+					var self = this; 
+					$('.flex-column').droppable( {
+						tolerance:"pointer",
+    					drop: function(ev, ui) {
+        					handleDropEvent(ev, ui, self);
+    					}
+  					});
+				}
+
+				function handleDropEvent(event, ui, self) {
+					// where drop happened
+  					var droppedDisc = ui.draggable;
+
+  					//droppedDisc.removeAttr('style');
+  					// define active tower, the tower the disc is currently being dragged from
+  					var towerFromIndex = droppedDisc.parent().attr("data-num");
+  					var towerToIndex = $(event.target).attr("data-num");
+  					var discIndex = droppedDisc.attr("data-num");
+  					self.moveDisc(towerFromIndex,towerToIndex, discIndex);
+  					// remove content of .flex-columns and draw according to new state pf game
+  					$('.rings').html("");
+  					self.drawDiscs();
+    				self.makeDiscsDraggable();
+    				self.updateCurrentNumberOfMoves();
+				}
+
+
+
+			} 
+ 			$(function() {
+    			var game = new Game(3);
+    			game.init();
+    			$("#numberOfDiscs").change(function() {
+  					game.changeNumberOfDiscs(this.value);
+				});
+    			$("#restart").click(function () {
+					game.init();
+				});
+				$("#solve").click(function () {
+					game.solve();
+				});
+  			});
+
+
+  		</script>
+	<style>
+		#game{
+			width: 500px;
+		}
+		.container {
+		  display: -webkit-flex;
+		  display: flex;
+		  height: 220px;
+		  overflow: hidden;
+		  margin-top:20px;
+		}
+
+		.flex-column {
+			background-color: #bbc0c1;
+		  -webkit-flex: 1;
+		          flex: 1;
+		    position: relative;
+		}
+
+		.pole {
+			margin: auto;
+			width: 8px;
+			height: 70%;
+			border-radius: 15px;
+			background-color: grey;
+			position: absolute;
+			bottom: 0px;
+			left: 0;
+			right: 0;			
+		}
+
+		.rings {
+			position: absolute;
+			margin: auto;
+			z-index: 10;
+			bottom: 0px;
+			left: 0;
+			right:0;
+		}
+		
+		.ring {
+			margin: auto;
+			height: 20px;
+			border-radius: 15px;
+		}
+		.sz-0 {
+			width: 40px;
+			background-color: purple;
+		}
+		.sz-1 {
+			width: 60px;
+			background-color: yellow;
+		}
+		.sz-2 {
+			width: 80px;
+			background-color: blue;
+		}	
+		.sz-3 {
+			width: 100px;
+			background-color: grey;
+		}
+		.sz-4 {
+			width: 120px;
+			background-color: orange;
+		}
+		.sz-5 {
+			width: 140px;
+			background-color: green;
+		}	
+		.sz-6 {
+			width: 160px;
+			background-color: red;
+		}
+
+		.controlElement {
+			margin-top: 20px;
+		}	
+
+
+	</style>
+	<body>
+		<h3>Tower of Hanoi</h3>
+		The objective of the puzzle is to move the entire stack to another rod, obeying the following simple rules:
+			<ul>
+				<li>Only one disk can be moved at a time.</li>
+				<li>A disk can only be moved if it is the uppermost disk on a stack.</li>
+				<li>No disk may be placed on top of a smaller disk.</li>
+			</ul>
+		
+		<label for="discs">Number of discs</label>
+			<select id = "numberOfDiscs">
+			<option value="3" selected="selected">3</option>
+			<option value="4">4</option>
+			<option value="5">5</option>
+			<option value="6">6</option>
+			<option value="7">7</option>
+		</select>
+		<span id="minMoves"></span>
+		<div id = "game" class = "container">
+			<div class = "flex-column" data-num = "0">	
+				<div class = "pole">
+				</div>
+				<div class = "rings" data-num = "0">
+				</div>	
+											
+			</div>	
+			<div class = "flex-column" data-num = "1">	
+				<div class = "pole">
+				</div>
+				<div class = "rings" data-num = "1">
+				</div>								
+			</div>
+			<div class = "flex-column" data-num = "2">
+				<div class = "pole">
+				</div>
+				<div class = "rings" data-num = "2">
+				</div>				
+			</div>
+		</div>
+		<!-- Control inputs -->
+		<div class = "controlPanel">
+
+		
+		<div>
+			<button id = "restart" class = "controlElement">Restart</button>
+			<button id = "solve" class = "controlElement">Show solution</button>
+			
+		</div>	
+		<div class = "controlElement">
+			<span id="currentNumOfMoves">Current number of moves: 0</span>
+		</div>
+	</div>
+	</body>
+</html>
